@@ -32,7 +32,6 @@ export async function listMemories(prefix = "/"): Promise<MemoryEntry[]> {
   const entries: MemoryEntry[] = [];
   const page = await client.beta.memoryStores.memories.list(storeId, { path_prefix: prefix, limit: 100 } as never);
   for await (const memory of page) {
-
     entries.push({
       type: String(memory.type ?? "memory"),
       path: String(memory.path ?? ""),
