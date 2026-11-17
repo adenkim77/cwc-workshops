@@ -17,41 +17,40 @@ export async function GET(request: Request) {
   }
 
   const client = getClient();
-  // TODO(workshop-2): reading a conversation is streaming the session's events.
-  //
-  //   1. Open the live event stream:
-  //        const upstream = (await client.beta.sessions.events.stream(sessionId)) as AsyncIterable<unknown>;
-  //      (wrap it in try/catch and return a 502 with the error if it fails)
-  //   2. Forward every event to the browser as a Server-Sent Events frame:
-  //        const encoder = new TextEncoder();
-  //        const stream = new ReadableStream<Uint8Array>({
-  //          async start(controller) {
-  //            try {
-  //              for await (const event of upstream) {
-  //                if (request.signal.aborted) break;
-  //                controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
-  //              }
-  //            } catch (error) {
-  //              if (!request.signal.aborted) {
-  //                logEvent("warning", "stream_proxy_error", { session_id: sessionId, error: String(error) });
-  //              }
-  //            } finally {
-  //              controller.close();
-  //            }
-  //          },
-  //        });
-  //   3. Return it with SSE headers:
-  //        return new Response(stream, {
-  //          headers: {
-  //            "content-type": "text/event-stream",
-  //            "cache-control": "no-cache, no-transform",
-  //            "x-accel-buffering": "no",
-  //          },
-  //        });
-  void client;
-  void logEvent;
-  return new Response(
-    JSON.stringify({ error: "TODO(workshop-2): connect the session event stream in src/app/api/desk/stream/route.ts" }),
-    { status: 501 },
-  );
+
+  // Reading a conversation is streaming the session's live event log.
+  let upstream: AsyncIterable<unknown>;
+  try {
+    upstream = (await client.beta.sessions.events.stream(sessionId)) as AsyncIterable<unknown>;
+  } catch (error) {
+    logEvent("warning", "stream_proxy_open_failed", { session_id: sessionId, error: String(error) });
+    return new Response(JSON.stringify({ error: String(error) }), { status: 502 });
+  }
+
+  // Forward every upstream event to the browser as a Server-Sent Events frame.
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        for await (const event of upstream) {
+          if (request.signal.aborted) break;
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        }
+      } catch (error) {
+        if (!request.signal.aborted) {
+          logEvent("warning", "stream_proxy_error", { session_id: sessionId, error: String(error) });
+        }
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "content-type": "text/event-stream",
+      "cache-control": "no-cache, no-transform",
+      "x-accel-buffering": "no",
+    },
+  });
 }

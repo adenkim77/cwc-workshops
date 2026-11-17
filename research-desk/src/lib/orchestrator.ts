@@ -208,15 +208,10 @@ class DeskOrchestrator {
   async sendToHead(text: string): Promise<string> {
     const client = getClient();
     const sessionId = await this.ensureHeadSession();
-    // TODO(workshop-1): a chat message is one event appended to the session's log.
-    //
-    // Send it with:
-    //   await client.beta.sessions.events.send(sessionId, {
-    //     events: [{ type: "user.message", content: [{ type: "text", text }] }],
-    //   });
-    void client;
-    void text;
-    throw new Error("TODO(workshop-1): send the user.message event in sendToHead (src/lib/orchestrator.ts)");
+    // A chat message is one event appended to the session's durable log.
+    await client.beta.sessions.events.send(sessionId, {
+      events: [{ type: "user.message", content: [{ type: "text", text }] }],
+    });
     return sessionId;
   }
 

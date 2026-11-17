@@ -57,12 +57,24 @@ export default function DeskChat({ provisioned }: { provisioned: boolean }) {
   // Connect to the head session: load history in one batch, then follow the live stream.
   useEffect(() => {
     if (!provisioned) return;
+    // Each connection re-loads history from scratch, so the dedup set must start
+    // empty too. Without this, StrictMode's double-invoke (and any reconnect)
+    // leaves seenIds populated from the previous run, so the second history load
+    // dedups every event to nothing and setEntries([]) blanks the timeline.
+    seenIds.current = new Set<string>();
     const controller = new AbortController();
     const start = async () => {
       try {
         const { session_id } = await api<{ session_id: string }>("/api/desk/chat");
+        // The chat/events fetches don't take the abort signal, so a run that was
+        // already torn down (StrictMode's first mount, or a reconnect) can still
+        // resolve here. Bail before touching shared state so only the live
+        // connection writes — otherwise two concurrent runs race on seenIds and
+        // the loser blanks the timeline with setEntries([]).
+        if (controller.signal.aborted) return;
         setSessionId(session_id);
         const history = await api<{ data: SessionEvent[] }>(`/api/desk/events?session_id=${session_id}`);
+        if (controller.signal.aborted) return;
         const initial: TimelineEntry[] = [];
         (history.data ?? []).forEach((event, index) => {
           if (event.id) {

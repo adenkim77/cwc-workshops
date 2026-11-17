@@ -76,12 +76,16 @@ export async function defineOutcome(
   //     rubric: { type: "text", content: rubric },
   //     max_iterations: maxIterations,
   //   }
-  void client;
-  void sessionId;
-  void description;
-  void rubric;
-  void maxIterations;
-  throw new Error("TODO(workshop-6): send the user.define_outcome event in defineOutcome");
+  await client.beta.sessions.events.send(sessionId, {
+    events: [
+      {
+        type: "user.define_outcome",
+        description,
+        rubric: { type: "text", content: rubric },
+        max_iterations: maxIterations,
+      },
+    ],
+  } as never);
 }
 
 /**

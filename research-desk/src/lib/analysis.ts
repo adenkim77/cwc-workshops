@@ -91,9 +91,20 @@ export async function analyzeTicker(
     //       instructions: MEMORY_MOUNT_INSTRUCTIONS,
     //     },
     //   ],
-    const session = todoStub<{ id: string }>(
-      "TODO(workshop-5): create the analyst session with the memory store attached",
-    );
+    const session = await client.beta.sessions.create({
+      agent: cfg.analyst_agent_id,
+      environment_id: cfg.environment_id,
+      title: `Filing analysis: ${record.ticker}`,
+      metadata: { ticker: record.ticker, kind: "analysis" },
+      resources: [
+        {
+          type: "memory_store",
+          memory_store_id: cfg.memory_store_id,
+          access: "read_write",
+          instructions: MEMORY_MOUNT_INSTRUCTIONS,
+        },
+      ],
+    } as never);
     record.sessionId = session.id;
     record.url = sessionUrl(session.id);
     logEvent("info", "analysis_started", { ticker: record.ticker, session_id: session.id });

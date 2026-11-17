@@ -31,12 +31,13 @@ export async function listMemories(prefix = "/"): Promise<MemoryEntry[]> {
   const storeId = requireStoreId();
   const entries: MemoryEntry[] = [];
   const page = await client.beta.memoryStores.memories.list(storeId, { path_prefix: prefix, limit: 100 } as never);
-  for (const memory of (page as unknown as { data?: Array<Record<string, unknown>> }).data ?? []) {
+  for await (const memory of page) {
+
     entries.push({
       type: String(memory.type ?? "memory"),
       path: String(memory.path ?? ""),
-      size: typeof memory.content_size_bytes === "number" ? memory.content_size_bytes : undefined,
-      sha: typeof memory.content_sha256 === "string" ? memory.content_sha256.slice(0, 10) : undefined,
+      size: memory.type === "memory" && typeof memory.content_size_bytes === "number" ? memory.content_size_bytes : undefined,
+      sha: memory.type === "memory" && typeof memory.content_sha256 === "string" ? memory.content_sha256.slice(0, 10) : undefined,
     });
   }
   return entries;
@@ -45,12 +46,16 @@ export async function listMemories(prefix = "/"): Promise<MemoryEntry[]> {
 export async function showMemory(path: string): Promise<{ path: string; content: string } | null> {
   const client = getClient();
   const storeId = requireStoreId();
+  // path_prefix must be segment-aligned and end with "/", so list the memory's
+  // containing folder (everything up to and including the last slash) and pick
+  // the exact file out of the results below.
+  const dirPrefix = path.slice(0, path.lastIndexOf("/") + 1) || "/";
   const page = await client.beta.memoryStores.memories.list(storeId, {
-    path_prefix: path,
+    path_prefix: dirPrefix,
     view: "full",
     limit: 50,
   } as never);
-  for (const memory of (page as unknown as { data?: Array<Record<string, unknown>> }).data ?? []) {
+  for await (const memory of page) {
     if (memory.type === "memory" && memory.path === path) {
       return { path, content: String(memory.content ?? "") };
     }

@@ -55,7 +55,26 @@ const ALLOWED_HOSTS = [
 //       required: ["tickers"],
 //     },
 //   }
-const DISPATCH_TOOL: Record<string, unknown> | null = null;
+const DISPATCH_TOOL: Record<string, unknown> | null = {
+  type: "custom",
+  name: "dispatch_analysts",
+  description:
+    "Get fresh, validated scorecards for one or more tickers the desk has no current notes on in memory. " +
+    "Spawns one filing analyst per ticker; each analyst also writes a research note to the shared memory. " +
+    "Do not use it for companies whose existing memory notes already answer the question.",
+  input_schema: {
+    type: "object",
+    properties: {
+      tickers: {
+        type: "array",
+        items: { type: "string" },
+        description: "Tickers to analyze, one analyst per ticker",
+      },
+      focus: { type: "string", description: "Optional angle for the analysts to emphasize" },
+    },
+    required: ["tickers"],
+  },
+};
 
 const AGENT_TOOLSET = {
   type: "agent_toolset_20260401",
@@ -213,7 +232,21 @@ export async function provisionDesk(agentPrefix = "research-desk"): Promise<{ co
   //       { type: "self" },
   //     ],
   //   },
-  const analyst = todoStub("TODO(workshop-3): create the filing-analyst coordinator agent in src/lib/provision.ts");
+  const analyst = await client.beta.agents.create({
+    name: `${agentPrefix}-filing-analyst`,
+    model: MODEL,
+    system: loadPrompt("analyst_system.md", { edgar_identity: cfg.edgar_identity }),
+    tools: [AGENT_TOOLSET],
+    skills: skillsRef,
+    multiagent: {
+      type: "coordinator",
+      agents: [
+        { type: "agent", id: financials.id },
+        { type: "agent", id: risk.id },
+        { type: "self" },
+      ],
+    },
+  } as never);
   cfg.analyst_agent_id = analyst.id;
   steps.push({ step: "filing analyst (coordinator)", id: analyst.id });
 
